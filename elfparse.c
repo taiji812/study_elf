@@ -234,6 +234,140 @@ void print_program_header(unsigned char *elf)
 }
 
 
+
+struct map_sht_string
+{
+    Elf64_Word sht;
+    char *string;
+};
+
+struct map_sht_string sht_string[] = {
+    {SHT_NULL	           ,"NULL"},	       
+    {SHT_PROGBITS          ,"PROGBITS"},
+    {SHT_SYMTAB	           ,"SYMTAB"},	
+    {SHT_STRTAB	           ,"STRTAB"},	
+    {SHT_RELA	           ,"RELA"},	
+    {SHT_HASH	           ,"HASH"},	
+    {SHT_DYNAMIC	       ,"DYNAMIC"},	
+    {SHT_NOTE	           ,"NOTE"},	
+    {SHT_NOBITS	           ,"NOBITS"},	
+    {SHT_REL		       ,"REL"},		
+    {SHT_SHLIB	           ,"SHLIB"},	
+    {SHT_DYNSYM	           ,"DYNSYM"},
+    {SHT_INIT_ARRAY	       ,"INIT_ARRAY"},	 
+    {SHT_FINI_ARRAY	       ,"FINI_ARRAY"},	 
+    {SHT_PREINIT_ARRAY     ,"PREINIT_ARRAY"},
+    {SHT_GROUP             ,"GROUP"},
+    {SHT_SYMTAB_SHNDX      ,"SYMTAB_SHNDX"},
+    {SHT_NUM	           ,"NUM"},	
+    {SHT_LOOS              ,"LOOS"},
+    {SHT_GNU_ATTRIBUTES    ,"GNU_ATTRIBUTES"},
+    {SHT_GNU_HASH	       ,"GNU_HASH"},	  
+    {SHT_GNU_LIBLIST	   ,"GNU_LIBLIST"},   
+    {SHT_CHECKSUM	       ,"CHECKSUM"},	  
+    {SHT_LOSUNW	           ,"LOSUNW"},	 
+    {SHT_SUNW_move         ,"SUNW_move"},
+    {SHT_SUNW_COMDAT       ,"SUNW_COMDAT"}, 
+    {SHT_SUNW_syminfo      ,"SUNW_syminfo"},
+    {SHT_GNU_verdef	       ,"GNU_verdef"},	
+    {SHT_GNU_verneed	   ,"GNU_verneed"},   
+    {SHT_GNU_versym	       ,"GNU_versym"},	
+};
+
+static inline char* get_sht_string(Elf64_Word sht)
+{
+    int i = 0;
+    for ( ; i < sizeof(sht_string)/sizeof(sht_string[0]) ;i++)
+    {
+        if (sht_string[i].sht == sht)
+            return sht_string[i].string;
+    }
+    return "NULL";
+}
+
+/*
+ * Key to Flags:
+ *   W (write), A (alloc), X (execute), M (merge), S (strings), l (large)
+ *   I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)
+ *   O (extra OS processing required) o (OS specific), p (processor specific)
+ */
+struct map_shf_string
+{
+	Elf64_Xword shf;
+	char key;	
+};
+
+struct map_shf_string shf_string[] = {
+	{SHF_WRITE	            ,'W'},	// 1
+	{SHF_ALLOC	            ,'A'},	// 2
+	{SHF_EXECINSTR          ,'X'},	// 4
+	{SHF_MERGE	            ,'M'},	// 16
+	{SHF_STRINGS	        ,'S'},	// 32
+	{SHF_INFO_LINK          ,'I'},	// 64
+	{SHF_LINK_ORDER         ,'L'},	// 128
+	{SHF_GROUP	            ,'G'},	// 512 
+	{SHF_TLS		        ,'T'},  // 1024
+	{SHF_OS_NONCONFORMING   ,'O'},  // 256
+	{SHF_MASKOS	            ,'o'},  // 0x0ff00000
+	{SHF_MASKPROC           ,'p'},  // 0xf0000000
+	{SHF_EXCLUDE            ,'E'},
+//	{SHF_COMPRESSED         ,"COMPRESSED
+//	{SHF_ORDERED	        ,"ORDERED	  
+};
+
+static char shflag_string[4];
+static inline char *get_shf_string(Elf64_Xword shf)
+{
+	//TODO figure out exact string size for sh_flags
+	memset(shflag_string, 0x00, 4);
+	int i = 0;
+	int j = 0;
+	for( ; i<sizeof(shf_string)/sizeof(shf_string[0]) && j<3; i++)
+	{
+		if (shf_string[i].shf & shf)
+		{
+			shflag_string[j] = shf_string[i].key;
+			j++;
+		}
+	}
+	return shflag_string;
+}
+
+void print_section_header(unsigned char *elf)
+{
+    Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf;
+    Elf64_Shdr *shdr = (Elf64_Shdr *)(elf+ehdr->e_shoff);
+    char *sh_str_table = &elf[shdr[ehdr->e_shstrndx].sh_offset];
+    printf("Section Headers:\n");
+    /*
+    [Nr] Name              Type             Address           Offset
+           Size              EntSize          Flags  Link  Info  Align
+    [ 1] .interp           PROGBITS         0000000000400238  00000238
+           000000000000001c  0000000000000000   A       0     0     1
+
+    */
+    printf("%*s[NR] %-18s %-18s %-16s %-8s %-16s %-16s %-5s %-4s %-4s %-5s\n",
+            2,"", "Name", "Type", "Address", "Offset",
+            "Size", "EntSize", "Flags", "Link", "Info", "Align");
+    int i = 0;
+    for ( ; i < ehdr->e_shnum; i++)
+    {
+		printf("%*s[%2d] ", 2, "", i);
+        printf("%-18s ", sh_str_table+shdr[i].sh_name);
+        printf("%-18s ", get_sht_string(shdr[i].sh_type));
+        printf("%016lx ", shdr[i].sh_addr);
+		printf("%08lx ", shdr[i].sh_offset);
+		printf("%016lx ", shdr[i].sh_size);
+		printf("%016lx ", shdr[i].sh_entsize);
+		printf("%3s  ", get_shf_string(shdr[i].sh_flags));
+		printf("%*s%2u ", 2, "", shdr[i].sh_link);
+		printf("%*s%2u ", 2, "", shdr[i].sh_info);
+		printf("%*s%-2u", 4,"",(unsigned int)shdr[i].sh_addralign);
+		printf("\n");
+   	} 
+}
+
+
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -264,4 +398,5 @@ int main(int argc, char *argv[])
 
     print_file_header(elf_mem);    
     print_program_header(elf_mem);
+    print_section_header(elf_mem);
 }
